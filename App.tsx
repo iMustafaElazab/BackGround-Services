@@ -1,118 +1,119 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import React, {useEffect, useState} from 'react';
+import {View, Text, ScrollView, Button} from 'react-native';
+import BackgroundFetch from 'react-native-background-fetch';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import PushNotification from 'react-native-push-notification';
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+const App = () => {
+  const [logs, setLogs] = useState([]);
+  const [isServiceStarted, setIsServiceStarted] = useState(false);
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+  useEffect(() => {
+    const loadLogs = async () => {
+      const storedLogs = await AsyncStorage.getItem('backgroundFetchLogs');
+      if (storedLogs) {
+        setLogs(JSON.parse(storedLogs));
+      }
+    };
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+    loadLogs();
+  }, []);
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
+  const startBackgroundService = () => {
+    if (isServiceStarted) {
+      console.log('Background service already started.');
+      return;
+    }
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+    // Configure the background fetch.
+    BackgroundFetch.configure(
+      {
+        minimumFetchInterval: 15, // <-- minutes (15 is minimum allowed)
+        // Android options
+        stopOnTerminate: false,
+        startOnBoot: true,
+        requiredNetworkType: BackgroundFetch.NETWORK_TYPE_NONE, // Default
+        requiresCharging: false, // Default
+        requiresDeviceIdle: false, // Default
+        requiresBatteryNotLow: false, // Default
+        requiresStorageNotLow: false, // Default
+      },
+      async taskId => {
+        console.log('[BackgroundFetch] taskId: ', taskId);
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+        // Get current time
+        const timestamp = new Date().toISOString();
+
+        // Add the new log entry to the logs array
+        const newLog = `[${timestamp}] BackgroundFetch taskId: ${taskId}`;
+        const updatedLogs = [...logs, newLog];
+
+        // Save the logs to AsyncStorage
+        await AsyncStorage.setItem(
+          'backgroundFetchLogs',
+          JSON.stringify(updatedLogs),
+        );
+
+        // Update state
+        setLogs(updatedLogs);
+
+        // Send a notification
+        PushNotification.localNotification({
+          channelId: 'background-fetch-channel',
+          title: 'Background Fetch',
+          message: `Task executed: ${taskId}`,
+        });
+
+        // Call BackgroundFetch.finish(taskId) once your task is done.
+        BackgroundFetch.finish(taskId);
+      },
+      error => {
+        console.log('[BackgroundFetch] configure error: ', error);
+      },
+    );
+
+    // Optional: Query the current BackgroundFetch status.
+    BackgroundFetch.status(status => {
+      switch (status) {
+        case BackgroundFetch.STATUS_RESTRICTED:
+          console.log('BackgroundFetch restricted');
+          break;
+        case BackgroundFetch.STATUS_DENIED:
+          console.log('BackgroundFetch denied');
+          break;
+        case BackgroundFetch.STATUS_AVAILABLE:
+          console.log('BackgroundFetch is enabled');
+          break;
+      }
+    });
+
+    setIsServiceStarted(true);
+    console.log('Background service started.');
+  };
+
+  const triggerNotification = () => {
+    PushNotification.localNotification({
+      channelId: 'background-fetch-channel',
+      title: 'Test Notification',
+      message: 'This is a test notification',
+    });
   };
 
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+    <ScrollView>
+      <View>
+        <Text>Background Fetch Example</Text>
+        <Button
+          title="Start Background Service"
+          onPress={startBackgroundService}
+        />
+        <Button title="Trigger Notification" onPress={triggerNotification} />
+        {logs.map((log, index) => (
+          <Text key={index}>{log}</Text>
+        ))}
+      </View>
+    </ScrollView>
   );
-}
-
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-});
+};
 
 export default App;
