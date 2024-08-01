@@ -1,9 +1,13 @@
 package com.awesomeproject
 
+import android.content.pm.PackageManager
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
+import android.os.Build
+import android.os.Bundle
+import androidx.core.app.ActivityCompat
 
 class MainActivity : ReactActivity() {
 
@@ -19,4 +23,16 @@ class MainActivity : ReactActivity() {
    */
   override fun createReactActivityDelegate(): ReactActivityDelegate =
       DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled)
+
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(null)
+
+        // Request notification permission for Android 13 (API level 33) and above
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
+            }
+        }
+    }
 }
